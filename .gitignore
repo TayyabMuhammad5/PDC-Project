@@ -1,0 +1,19 @@
+# Datasets and benchmark outputs
+datasets/
+results/
+
+# Compiled binaries and object files
+tc_mpi
+*.o
+*.out
+
+# SSH keys or secrets (never commit)
+*.pem
+*.key
+*id_rsa*
+.env
+
+# Python / OS artifacts
+__pycache__/
+*.pyc
+.DS_Store
