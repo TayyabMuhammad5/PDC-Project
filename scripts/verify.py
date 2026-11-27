@@ -55,7 +55,7 @@ def build_20_random_oracle():
 
 def main():
     parser = argparse.ArgumentParser(description="Verify distributed triangle counting correctness.")
-    parser.add_argument("--algo", default="all", help="Algorithm to test ('tric', 'step1', 'step1_id', 'step2', 'step3', or 'all')")
+    parser.add_argument("--algo", default="all", help="Algorithm to test ('tric', 'step1', 'step1_id', 'step2', 'step3', 'brute', or 'all')")
     parser.add_argument("--snap", action="store_true", help="Include Table II SNAP datasets")
     parser.add_argument("--random20", action="store_true", help="Include 20 seeded random G(n,p) graphs")
     args = parser.parse_args()
@@ -90,21 +90,34 @@ def main():
                         failures += 1
 
     if args.random20:
+        # Independent reference: --algo brute runs the O(V^3) counter in test_utils (rank 0, tiny graphs only).
+        # It does NOT use the algorithm under test, so a systematic counting error cannot pass.
+        checked = 0
         for spec in build_20_random_oracle():
-            # Reference at P=1 without relabeling; cross-check all P in {1,2,4,8} with & without relabeling
-            ref_v, ref_e, ref_2e, ref_t = run_case(algos[0], spec, 1, relabel=False)
+            try:
+                ref_v, ref_e, ref_2e, ref_t = run_case("brute", spec, 1, relabel=False)
+            except Exception as exc:
+                print("[ERROR] brute oracle failed on {} -> {}".format(spec, exc))
+                failures += 1
+                continue
             for algo in algos:
                 for p in RANKS:
                     for relabel in (False, True):
-                        v, undirected_e, sym_2e, t = run_case(algo, spec, p, relabel=relabel)
-                        ok = (v == ref_v and sym_2e == ref_2e and t == ref_t)
-                        if not ok:
-                            print("[FAIL] {} algo={} P={} relabel={} -> V={}, E={}, T={} (expected V={}, E={}, T={})".format(
-                                spec, algo, p, relabel, v, undirected_e, t, ref_v, ref_e, ref_t
-                            ))
+                        try:
+                            v, undirected_e, sym_2e, t = run_case(algo, spec, p, relabel=relabel)
+                        except Exception as exc:
+                            print("[ERROR] {} algo={} P={} relabel={} -> {}".format(spec, algo, p, relabel, exc))
                             failures += 1
-        print("[INFO] Completed 20 seeded random G(n,p) cross-rank/relabel checks.")
+                            continue
+                        ok = (v == ref_v and sym_2e == ref_2e and t == ref_t)
+                        checked += 1
+                        if not ok:
+                            print("[FAIL] {} algo={} P={} relabel={} -> V={}, E={}, T={} (brute: V={}, E={}, T={})".format(
+                                spec, algo, p, relabel, v, undirected_e, t, ref_v, ref_e, ref_t))
+                            failures += 1
+        print("[INFO] random20 vs brute-force oracle: {} runs checked".format(checked))
 
+    print("[SUMMARY] failures={}".format(failures))
     sys.exit(1 if failures else 0)
 
 
